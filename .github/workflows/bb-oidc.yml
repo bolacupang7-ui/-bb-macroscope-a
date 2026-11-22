@@ -1,0 +1,21 @@
+name: bb-oidc-test
+on: workflow_dispatch
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - name: oidc repo-binding test (bb-test-sus1lo)
+        run: |
+          TOK=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=macroscope" | jq -r .value)
+          echo "token_len=${#TOK}"
+          for R in "$GITHUB_REPOSITORY" "SusiloMaarif/bb-macroscope-b" "bb-macroscope-org-a/bb-org-repo" "susilomaarif/BB-MACROSCOPE-B" "SusiloMaarif/bb-macroscope-b.git" "$GITHUB_REPOSITORY/../../SusiloMaarif/bb-macroscope-b"; do
+            BODY=$(jq -nc --arg r "$R" --arg c "$GITHUB_SHA" '{repository:$r,review:{kind:"cra"},agent:"bb-nonexistent-agent",commit:$c}')
+            OUT=$(curl -s -w ' HTTP=%{http_code}' -X POST https://actions.macroscope.com/api/v1/github-actions/agent-runs -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' -d "$BODY")
+            echo "REPO=[$R] -> ${OUT:0:300}"
+          done
+          AUD=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          BODY=$(jq -nc --arg r "$GITHUB_REPOSITORY" --arg c "$GITHUB_SHA" '{repository:$r,review:{kind:"cra"},agent:"bb-nonexistent-agent",commit:$c}')
+          echo "WRONG-AUD -> $(curl -s -w ' HTTP=%{http_code}' -X POST https://actions.macroscope.com/api/v1/github-actions/agent-runs -H "Authorization: Bearer $AUD" -H 'Content-Type: application/json' -d "$BODY" | head -c 300)"
